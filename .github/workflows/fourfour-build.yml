@@ -108,9 +108,40 @@ jobs:
           cd "$SRC"
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
+      - name: Предполётная проверка (bazel, Xcode, диск)
+        continue-on-error: true
+        run: |
+          cd "$SRC"
+
+          XCODEVER="$(xcodebuild -version 2>&1 | tr '\n' ' ')"
+          PYVER="$(python3 --version 2>&1)"
+          DISK="$(df -h / | tail -1)"
+          BAZEL_ARCH="$(python3 -c 'import platform;print(platform.machine())')"
+          HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' -L -I \
+            "https://github.com/bazelbuild/bazel/releases/download/8.4.2/bazel-8.4.2-darwin-arm64" 2>/dev/null || echo 'curl-error')"
+          PROFILE="$(openssl smime -inform der -verify -noverify \
+            -in build-system/fake-codesigning/profiles/Telegram.mobileprovision 2>/dev/null \
+            | python3 -c 'import sys,plistlib;d=plistlib.loads(sys.stdin.buffer.read());print(d["Entitlements"].get("application-identifier"), d["Entitlements"].get("aps-environment"))' 2>&1)"
+
+          ARGPARSE="$(python3 build-system/Make/Make.py --overrideXcodeVersion build \
+            --configurationPath=build-system/appstore-configuration.json \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration=release_arm64 --buildNumber=1 --help 2>&1 | head -3 | tr '\n' ' ')"
+
+          python3 - "$XCODEVER" "$PYVER" "$DISK" "$BAZEL_ARCH" "$HTTP_CODE" "$PROFILE" "$ARGPARSE" <<'PY'
+          import sys
+
+          def escape(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          titles = ["Xcode", "python3", "диск", "arch (python)", "bazel URL HTTP", "профиль подписи", "argparse"]
+          for title, value in zip(titles, sys.argv[1:]):
+              print("::warning title=preflight {}::{}".format(title, escape(value[:900])))
+          PY
+
       - name: Собрать приложение (bazel)
         run: |
-          set -eo pipefail
+          set -o pipefail
           cd "$SRC"
           BUILD_NUMBER="$(cat build_number_offset)"
           echo "build number: $BUILD_NUMBER"
@@ -121,6 +152,7 @@ jobs:
             *) ARTIFACTS_ARGS="" ;;
           esac
 
+          BUILD_FAILED=0
           python3 -u build-system/Make/Make.py \
             --overrideXcodeVersion \
             --bazelUserRoot="$RUNNER_TEMP/bazel-user-root" \
@@ -129,7 +161,30 @@ jobs:
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration="$configuration" \
             --buildNumber="$BUILD_NUMBER" \
-            $ARTIFACTS_ARGS 2>&1 | tee "$RUNNER_TEMP/build.log"
+            $ARTIFACTS_ARGS 2>&1 | tee "$RUNNER_TEMP/build.log" || BUILD_FAILED=1
+
+          echo "exit status сборки: $BUILD_FAILED"
+          echo "$BUILD_FAILED" > "$RUNNER_TEMP/build-failed"
+
+          # Лог сборки недоступен снаружи (артефакты качаются с другого хоста), поэтому
+          # ключевые строки ошибки публикуем как аннотации — они читаются через API репозитория.
+          if [ "$BUILD_FAILED" != "0" ]; then
+            python3 - "$RUNNER_TEMP/build.log" <<'PY'
+          import sys
+          lines = open(sys.argv[1], errors="replace").read().splitlines()
+
+          def escape(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          keys = ("ERROR", "error:", "Error", "FAILED", "Traceback", "curl:", "Exception", "No such")
+          interesting = [line for line in lines if any(key in line for key in keys)]
+          chosen = (interesting or lines[-15:])[:15]
+          for index, line in enumerate(chosen):
+              print("::error title=build log {}::{}".format(index + 1, escape(line[:900])))
+          print("::error title=build log tail::{}".format(escape("\n".join(lines[-25:])[:9000])))
+          PY
+            exit 1
+          fi
 
       - name: Проверить имя приложения в собранном бандле
         id: verify
