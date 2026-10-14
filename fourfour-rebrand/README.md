@@ -118,6 +118,7 @@ cp changed-files/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift \
 Откат: `baseline/original/…` — это байт-в-байт оригинальные файлы апстрима.
 
 ```
+ci/appstore-configuration.json            конфигурация сборки для CI (апстрим + обязательный sg_config)
 ../.github/workflows/fourfour-build.yml  сборка на macOS (GitHub Actions), публикует .ipa + имя из Info.plist
 patches/0001-fourfour-rebrand.patch      патч (git apply / patch -p1)
 changed-files/                           готовые изменённые файлы
@@ -208,6 +209,15 @@ build/MACOS-BUILD.md                     как собрать на macOS (Xcode
 5. читает `CFBundleDisplayName`/`CFBundleName` из `Info.plist` **собранного приложения и из упакованного `.ipa`**,
    публикует их в Summary запуска и **падает с ошибкой**, если имя не `fourfour`;
 6. загружает `.ipa` (unsigned) как артефакт `fourfour-ipa`.
+
+Важная деталь: `Make.py` этого форка **требует ключ `sg_config`** в конфигурации
+(иначе сборка падает с «Configuration at ... does not contain sg_config»), а штатный
+`build-system/appstore-configuration.json` апстрима его не содержит — собственник
+CI у форка тоже сломан. Поэтому CI использует файл [ci/appstore-configuration.json](ci/appstore-configuration.json):
+значения один-в-один как в апстримном конфиге (bundle id, team id, api id — подписи/идентичность
+не меняются) плюс `sg_config` (пустая строка → ветка Swiftgram использует свои дефолты,
+на UI/брендинг Telegram это не влияет). Файлы апстрима при этом не перезаписываются:
+конфиг копируется в рабочую копию как `build-system/fourfour-ci-configuration.json`.
 
 Запуск: вручную (Actions → «fourfour build (macOS)» → Run workflow) или автоматически при push в ветку
 (workflow лежит в `.github/workflows/fourfour-build.yml`, триггеры — `workflow_dispatch` и `push` с фильтром путей).

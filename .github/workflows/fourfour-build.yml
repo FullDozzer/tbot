@@ -97,6 +97,12 @@ jobs:
           cp fourfour-rebrand/changed-files/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift \
              "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
 
+          # CI-конфигурация сборки: значения как в build-system/appstore-configuration.json апстрима
+          # плюс обязательный для форка Swiftgram ключ sg_config (форк падает без него:
+          # "Configuration at ... does not contain sg_config"). Исходные файлы апстрима не меняются.
+          cp fourfour-rebrand/ci/appstore-configuration.json "$SRC/build-system/fourfour-ci-configuration.json"
+          python3 -c "import json;d=json.load(open('$SRC/build-system/fourfour-ci-configuration.json'));print('CI-конфигурация:', d['bundle_id'], d['team_id'], 'sg_config:', repr(d['sg_config']))"
+
           echo "== проверка применённых изменений =="
           grep -n "<string>fourfour</string>" "$SRC/Telegram/BUILD"
           grep -n 'title: .text("fourfour")' "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
@@ -123,18 +129,20 @@ jobs:
             -in build-system/fake-codesigning/profiles/Telegram.mobileprovision 2>/dev/null \
             | python3 -c 'import sys,plistlib;d=plistlib.loads(sys.stdin.buffer.read());print(d["Entitlements"].get("application-identifier"), d["Entitlements"].get("aps-environment"))' 2>&1)"
 
+          CONFIG_CHECK="$(python3 -c "import sys; sys.path.insert(0, 'build-system/Make'); from BuildConfiguration import build_configuration_from_json as load; c = load(path='build-system/fourfour-ci-configuration.json'); print('OK bundle_id=%s team_id=%s sg_config=%r' % (c.bundle_id, c.team_id, c.sg_config))" 2>&1 | tail -3 | tr '\n' ' ')"
+
           ARGPARSE="$(python3 build-system/Make/Make.py --overrideXcodeVersion build \
-            --configurationPath=build-system/appstore-configuration.json \
+            --configurationPath=build-system/fourfour-ci-configuration.json \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 --buildNumber=1 --help 2>&1 | head -3 | tr '\n' ' ')"
 
-          python3 - "$XCODEVER" "$PYVER" "$DISK" "$BAZEL_ARCH" "$HTTP_CODE" "$PROFILE" "$ARGPARSE" <<'PY'
+          python3 - "$XCODEVER" "$PYVER" "$DISK" "$BAZEL_ARCH" "$HTTP_CODE" "$PROFILE" "$CONFIG_CHECK" "$ARGPARSE" <<'PY'
           import sys
 
           def escape(text):
               return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
-          titles = ["Xcode", "python3", "диск", "arch (python)", "bazel URL HTTP", "профиль подписи", "argparse"]
+          titles = ["Xcode", "python3", "диск", "arch (python)", "bazel URL HTTP", "профиль подписи", "CI-конфигурация", "argparse"]
           for title, value in zip(titles, sys.argv[1:]):
               print("::warning title=preflight {}::{}".format(title, escape(value[:900])))
           PY
@@ -157,7 +165,7 @@ jobs:
             --overrideXcodeVersion \
             --bazelUserRoot="$RUNNER_TEMP/bazel-user-root" \
             build \
-            --configurationPath=build-system/appstore-configuration.json \
+            --configurationPath=build-system/fourfour-ci-configuration.json \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration="$configuration" \
             --buildNumber="$BUILD_NUMBER" \
