@@ -55,7 +55,7 @@ jobs:
           sw_vers
           uname -m
           df -h /
-          nproc
+          sysctl -n hw.ncpu
           echo "configuration=${{ github.event.inputs.configuration || 'release_arm64' }}" >> "$GITHUB_ENV"
 
       - name: Освободить место на диске (удалить неиспользуемые Xcode)
