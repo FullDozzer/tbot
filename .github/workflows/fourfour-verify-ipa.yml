@@ -7,6 +7,15 @@ name: fourfour — проверка имени в собранном .ipa
 # Падает с ошибкой, если имя приложения не fourfour.
 
 on:
+  # при push в эти ветки проверяется артефакт последней успешной сборки
+  # (сам workflow сборки запускается отдельно, по своим путям)
+  push:
+    branches:
+      - arena/d33af276-tbot
+      - main
+    paths:
+      - "fourfour-rebrand/**"
+      - ".github/workflows/fourfour-verify-ipa.yml"
   workflow_dispatch:
     inputs:
       run_id:

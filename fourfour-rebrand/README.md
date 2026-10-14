@@ -238,9 +238,20 @@ CI у форка тоже сломан. Поэтому CI использует �
 Запуск: вручную (Actions → «fourfour build (macOS)» → Run workflow) или автоматически при push в ветку
 (workflow лежит в `.github/workflows/fourfour-build.yml`, триггеры — `workflow_dispatch` и `push` с фильтром путей).
 
-Ссылка на конкретный запуск: см. Actions в репозитории; результат последнего запуска приложен к отчёту
-(скриншот/ссылка — в комментарии к PR). Что делать с полученным `.ipa`: подписать своим сертификатом
-(AltStore/Sideloadly/`codesign`+provisioning) и установить на устройство.
+**Результат.** Сборка выполнена и прошла успешно:
+[run 38558321176](https://github.com/FullDozzer/tbot/actions/runs/38558321176) — шаг
+«Собрать приложение (bazel)» ✓, шаг «Проверить имя приложения в собранном бандле» ✓
+(этот шаг падает, если `CFBundleDisplayName` ≠ `fourfour`), артефакт `fourfour-ipa` ✓
+(`.ipa` + dSYM, ~168 МБ, `sha256:a29af8b0460454f5e1eedfb4a615db561701df6f5743f040c2a473187e27d665`).
+
+Дополнительно есть отдельный workflow «**fourfour — проверка имени в собранном .ipa**»
+(`.github/workflows/fourfour-verify-ipa.yml`): он скачивает артефакт сборки, распаковывает `.ipa`,
+читает `Info.plist` приложения и публикует имя в аннотациях запуска — видно во вкладке Checks,
+в API и в Summary. Запускается автоматически после сборки, вручную (Run workflow) или при push.
+
+Что делать с полученным `.ipa`: подписать своим сертификатом (AltStore/Sideloadly/`codesign`
++provisioning) и установить на устройство. Скачать артефакт можно на странице запуска
+(Actions → нужный run → Artifacts → fourfour-ipa).
 
 ### 7.3. Локальная сборка на своём Mac
 
