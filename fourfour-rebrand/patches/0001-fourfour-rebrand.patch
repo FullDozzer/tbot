@@ -1,0 +1,93 @@
+diff --git a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+index da487fa1..60645e33 100644
+--- a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
++++ b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+@@ -140,6 +140,52 @@ private struct SGSettingsControllerState: Equatable {
+ 
+ private typealias SGControllerEntry = SGItemListUIEntry<SGControllerSection, SGBoolSetting, SGSliderSetting, SGOneFromManySetting, SGDisclosureLink, AnyHashable>
+ 
++// MARK: fourfour branding
++// Фон верхней плашки (navigation bar) экрана настроек fourfour.
++private let SGFourFourPlaqueBackgroundColor = UIColor(rgb: 0x000000)
++
++// Локальная копия темы только для экрана настроек fourfour:
++// верхняя плашка — чёрная (#000000), текст и кнопки — белые.
++// Все остальные цвета берутся из активной темы без изменений,
++// поэтому остальной интерфейс Telegram/Swiftgram не затрагивается.
++private func sgFourFourSettingsPresentationData(_ presentationData: PresentationData) -> ItemListPresentationData {
++    let theme = presentationData.theme
++    let navigationBar = theme.rootController.navigationBar.withUpdated(
++        buttonColor: .white,
++        primaryTextColor: .white,
++        secondaryTextColor: .white,
++        blurredBackgroundColor: SGFourFourPlaqueBackgroundColor,
++        opaqueBackgroundColor: SGFourFourPlaqueBackgroundColor,
++        separatorColor: SGFourFourPlaqueBackgroundColor
++    )
++    let chatInputPanel = theme.chat.inputPanel.withUpdated(
++        panelControlColor: .white,
++        panelControlDisabledColor: UIColor.white.withAlphaComponent(0.5),
++        panelControlAccentColor: .white
++    )
++    let brandedTheme = PresentationTheme(
++        name: theme.name,
++        index: theme.index,
++        referenceTheme: theme.referenceTheme,
++        overallDarkAppearance: theme.overallDarkAppearance,
++        intro: theme.intro,
++        passcode: theme.passcode,
++        rootController: theme.rootController.withUpdated(
++            statusBarStyle: .white,
++            navigationBar: navigationBar
++        ),
++        list: theme.list,
++        chatList: theme.chatList,
++        chat: theme.chat.withUpdated(inputPanel: chatInputPanel),
++        actionSheet: theme.actionSheet,
++        contextMenu: theme.contextMenu,
++        inAppNotification: theme.inAppNotification,
++        chart: theme.chart,
++        preview: theme.preview
++    )
++    return ItemListPresentationData(presentationData.withUpdated(theme: brandedTheme))
++}
++
+ private func SGControllerEntries(presentationData: PresentationData, callListSettings: CallListSettings, experimentalUISettings: ExperimentalUISettings, appConfiguration: AppConfiguration, nameColors: PeerNameColors, state: SGSettingsControllerState) -> [SGControllerEntry] {
+     
+     let lang = presentationData.strings.baseLanguageCode
+@@ -720,7 +766,7 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
+         
+         let entries = SGControllerEntries(presentationData: presentationData, callListSettings: callListSettings, experimentalUISettings: experimentalUISettings, appConfiguration: appConfiguration, nameColors: PeerNameColors.with(availableReplyColors: availableReplyColors, availableProfileColors: availableProfileColors), state: state)
+         
+-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Swiftgram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
++        let controllerState = ItemListControllerState(presentationData: sgFourFourSettingsPresentationData(presentationData), title: .text("fourfour"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+         
+         // TODO(swiftgram): focusOnItemTag support
+         /* var index = 0
+diff --git a/Telegram/BUILD b/Telegram/BUILD
+index ea3559dd..f9700803 100644
+--- a/Telegram/BUILD
++++ b/Telegram/BUILD
+@@ -649,7 +649,7 @@ plist_fragment(
+     template =
+     """
+     <key>CFBundleDisplayName</key>
+-    <string>Swiftgram</string>
++    <string>fourfour</string>
+     """
+ )
+ 
+@@ -1737,11 +1737,11 @@ plist_fragment(
+     <key>CFBundleDevelopmentRegion</key>
+     <string>en</string>
+     <key>CFBundleDisplayName</key>
+-    <string>Swiftgram</string>
++    <string>fourfour</string>
+     <key>CFBundleIdentifier</key>
+     <string>{telegram_bundle_id}</string>
+     <key>CFBundleName</key>
+-    <string>Swiftgram</string>
++    <string>fourfour</string>
+     <key>CFBundlePackageType</key>
+     <string>APPL</string>
+     <key>CFBundleSignature</key>

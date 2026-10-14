@@ -1,0 +1,2 @@
+3cc41d7c0bb7cf1afa1a572ac9637d3d0ad33d93210bf82b791a09e1c628b2fa  fourfour-rebrand/baseline/original/Telegram/BUILD
+2455728beab2f2063eba0469417f19bb366a1dc60dd6b0eed3a0498148e55d38  fourfour-rebrand/baseline/original/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
