@@ -159,9 +159,9 @@ private func sgFourFourSettingsPresentationData(_ presentationData: Presentation
         separatorColor: SGFourFourPlaqueBackgroundColor
     )
     let chatInputPanel = theme.chat.inputPanel.withUpdated(
+        panelControlAccentColor: .white,
         panelControlColor: .white,
-        panelControlDisabledColor: UIColor.white.withAlphaComponent(0.5),
-        panelControlAccentColor: .white
+        panelControlDisabledColor: UIColor.white.withAlphaComponent(0.5)
     )
     let brandedTheme = PresentationTheme(
         name: theme.name,

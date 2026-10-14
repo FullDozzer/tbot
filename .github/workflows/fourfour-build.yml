@@ -1,0 +1,217 @@
+name: fourfour build (macOS)
+
+# Что делает этот workflow:
+#   1. скачивает чистый апстрим Swiftgram/Telegram-iOS (с проверкой SHA-256 архива);
+#   2. применяет изменения fourfour из fourfour-rebrand/changed-files/;
+#   3. собирает приложение через bazel (как это делает сам апстрим в своём CI,
+#      с fake-codesigning — реальный Apple Developer аккаунт не нужен);
+#   4. читает CFBundleDisplayName/CFBundleName из собранного Info.plist и публикует
+#      это как доказательство ребрендинга + сам .ipa как артефакт.
+#
+# Запуск: вручную (Actions -> fourfour build (macOS) -> Run workflow)
+#         или автоматически при push в ветку ниже.
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: "Конфигурация сборки (build-system/Make/Make.py)"
+        type: choice
+        options:
+          - release_arm64
+          - debug_sim_arm64
+        default: release_arm64
+  push:
+    branches:
+      - arena/d33af276-tbot
+      - main
+    paths:
+      - ".github/workflows/fourfour-build.yml"
+      - "fourfour-rebrand/changed-files/**"
+      - "fourfour-rebrand/patches/**"
+
+concurrency:
+  group: fourfour-build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_TARBALL_URL: "https://codeload.github.com/Swiftgram/Telegram-iOS/tar.gz/refs/heads/master"
+  UPSTREAM_TARBALL_SHA256: "cb17299b5c37329645c32720f58a6516e32e757b0aebefa934863a73f43cbed1"
+  UPSTREAM_XCODE_VERSION: "26.2"
+
+jobs:
+  build:
+    # macos-26 (arm64) — на образе есть Xcode 26.2, именно он зафиксирован в versions.json апстрима
+    runs-on: macos-26
+    timeout-minutes: 355
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Информация о среде
+        run: |
+          set -x
+          sw_vers
+          uname -m
+          df -h /
+          nproc
+          echo "configuration=${{ github.event.inputs.configuration || 'release_arm64' }}" >> "$GITHUB_ENV"
+
+      - name: Освободить место на диске (удалить неиспользуемые Xcode)
+        run: |
+          set -x
+          for xcode in /Applications/Xcode_*.app; do
+            case "$xcode" in
+              "/Applications/Xcode_${UPSTREAM_XCODE_VERSION}.app") echo "оставляю $xcode" ;;
+              *) echo "удаляю $xcode"; sudo rm -rf "$xcode" || true ;;
+            esac
+          done
+          df -h /
+
+      - name: Выбрать Xcode ${UPSTREAM_XCODE_VERSION}
+        run: |
+          set -x
+          if [ -d "/Applications/Xcode_${UPSTREAM_XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${UPSTREAM_XCODE_VERSION}.app/Contents/Developer"
+          else
+            echo "::warning::Xcode ${UPSTREAM_XCODE_VERSION} не найден на образе, использую текущий"
+          fi
+          xcode-select -p
+          xcodebuild -version
+          echo "SRC=$RUNNER_TEMP/upstream/Telegram-iOS-master" >> "$GITHUB_ENV"
+
+      - name: Скачать апстрим Swiftgram/Telegram-iOS
+        run: |
+          set -eo pipefail
+          mkdir -p "$RUNNER_TEMP/upstream"
+          curl -L --fail --retry 3 -o "$RUNNER_TEMP/swiftgram.tar.gz" "$UPSTREAM_TARBALL_URL"
+          echo "${UPSTREAM_TARBALL_SHA256}  $RUNNER_TEMP/swiftgram.tar.gz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/swiftgram.tar.gz" -C "$RUNNER_TEMP/upstream"
+          ls "$RUNNER_TEMP/upstream"
+
+      - name: Применить ребрендинг fourfour
+        run: |
+          set -eo pipefail
+          cp fourfour-rebrand/changed-files/Telegram/BUILD "$SRC/Telegram/BUILD"
+          cp fourfour-rebrand/changed-files/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift \
+             "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
+
+          echo "== проверка применённых изменений =="
+          grep -n "<string>fourfour</string>" "$SRC/Telegram/BUILD"
+          grep -n 'title: .text("fourfour")' "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
+          grep -n "UIColor(rgb: 0x000000)" "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
+
+      - name: Установить fake-сертификаты (без Apple Developer аккаунта)
+        run: |
+          set -x
+          cd "$SRC"
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+
+      - name: Собрать приложение (bazel)
+        run: |
+          set -eo pipefail
+          cd "$SRC"
+          BUILD_NUMBER="$(cat build_number_offset)"
+          echo "build number: $BUILD_NUMBER"
+
+          # --outputBuildArtifactsPath копирует .ipa (и dSYM) — доступно для сборок под устройство
+          case "$configuration" in
+            debug_arm64|release_arm64) ARTIFACTS_ARGS="--outputBuildArtifactsPath=$RUNNER_TEMP/artifacts" ;;
+            *) ARTIFACTS_ARGS="" ;;
+          esac
+
+          python3 -u build-system/Make/Make.py \
+            --overrideXcodeVersion \
+            --bazelUserRoot="$RUNNER_TEMP/bazel-user-root" \
+            build \
+            --configurationPath=build-system/appstore-configuration.json \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration="$configuration" \
+            --buildNumber="$BUILD_NUMBER" \
+            $ARTIFACTS_ARGS 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Проверить имя приложения в собранном бандле
+        id: verify
+        run: |
+          set -x
+          cd "$SRC"
+          APP="$(find -L bazel-out -type d -path "*Payload/*.app" | head -1)"
+          if [ -z "$APP" ]; then
+            APP="$(find -L bazel-out -type d -name "*.app" -maxdepth 14 | head -1)"
+          fi
+          echo "app bundle: $APP"
+          echo "APP_BUNDLE=$APP" >> "$GITHUB_ENV"
+
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP/Info.plist")"
+          BUNDLE_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleName" "$APP/Info.plist")"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")"
+          SHORT_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")"
+
+          # то же самое, но уже внутри упакованного .ipa (Payload/*.app/Info.plist)
+          IPA_PLIST_NAME=""
+          IPA="$(find "$RUNNER_TEMP/artifacts" -name "*.ipa" 2>/dev/null | head -1)"
+          if [ -n "$IPA" ]; then
+            IPA_PLIST_NAME="$(unzip -Z1 "$IPA" | grep -E "^Payload/[^/]+\.app/Info\.plist$" | head -1)"
+            echo "Info.plist внутри ipa: $IPA_PLIST_NAME"
+            unzip -p "$IPA" "$IPA_PLIST_NAME" > "$RUNNER_TEMP/ipa-Info.plist"
+            DISPLAY_NAME_IPA="$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$RUNNER_TEMP/ipa-Info.plist")"
+            echo "CFBundleDisplayName в ipa: $DISPLAY_NAME_IPA"
+          fi
+
+          {
+            echo "## fourfour — результат сборки"
+            echo ""
+            echo "| Ключ Info.plist | Значение |"
+            echo "| --- | --- |"
+            echo "| CFBundleDisplayName | \`$DISPLAY_NAME\` |"
+            echo "| CFBundleName | \`$BUNDLE_NAME\` |"
+            echo "| CFBundleIdentifier | \`$BUNDLE_ID\` |"
+            echo "| CFBundleShortVersionString | \`$SHORT_VERSION\` |"
+          } | tee build-info.md
+          cat build-info.md >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DISPLAY_NAME" != "fourfour" ]; then
+            echo "::error::CFBundleDisplayName в собранном приложении = '$DISPLAY_NAME', ожидалось 'fourfour'"
+            exit 1
+          fi
+          echo "OK: имя приложения в сборке — fourfour"
+
+      - name: Собрать артефакты (ipa + dSYM)
+        run: |
+          set -x
+          cd "$SRC"
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          # если Make.py не копировал ipa сам (например, сборка под симулятор) — найти вручную
+          if ! ls "$RUNNER_TEMP/artifacts"/*.ipa >/dev/null 2>&1; then
+            find -L bazel-out -name "*.ipa" -exec cp {} "$RUNNER_TEMP/artifacts/" \;
+          fi
+          if [ -f "$RUNNER_TEMP/ipa-Info.plist" ]; then
+            /usr/libexec/PlistBuddy -c "Print" "$RUNNER_TEMP/ipa-Info.plist" \
+              | grep -E "CFBundle(Display)?Name" >> "$RUNNER_TEMP/artifacts/build-info.md" || true
+          fi
+          cp build-info.md "$RUNNER_TEMP/artifacts/build-info.md" 2>/dev/null || true
+          cp versions.json "$RUNNER_TEMP/artifacts/versions.json" || true
+          ls -lh "$RUNNER_TEMP/artifacts"
+          for f in "$RUNNER_TEMP"/artifacts/*.ipa; do
+            [ -f "$f" ] && shasum -a 256 "$f" | tee -a "$RUNNER_TEMP/artifacts/build-info.md"
+          done
+          cat "$RUNNER_TEMP/artifacts/build-info.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Загрузить артефакты
+        uses: actions/upload-artifact@v4
+        with:
+          name: fourfour-ipa
+          path: ${{ runner.temp }}/artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Лог сборки при ошибке
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ${{ runner.temp }}/build.log
+          if-no-files-found: ignore
+          retention-days: 7
+

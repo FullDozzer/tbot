@@ -118,6 +118,7 @@ cp changed-files/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift \
 Откат: `baseline/original/…` — это байт-в-байт оригинальные файлы апстрима.
 
 ```
+../.github/workflows/fourfour-build.yml  сборка на macOS (GitHub Actions), публикует .ipa + имя из Info.plist
 patches/0001-fourfour-rebrand.patch      патч (git apply / patch -p1)
 changed-files/                           готовые изменённые файлы
 baseline/original/                       оригиналы изменённых файлов
@@ -180,9 +181,9 @@ build/MACOS-BUILD.md                     как собрать на macOS (Xcode
 
 ---
 
-## 7. Что проверено в этой среде и что нет
+## 7. Что проверено и что проверяется сборкой
 
-Проверено (лог: [build/VERIFICATION-LOG.txt](build/VERIFICATION-LOG.txt)):
+### 7.1. Проверено здесь (Linux, без Xcode) — лог: [build/VERIFICATION-LOG.txt](build/VERIFICATION-LOG.txt)
 
 1. **Патч применяется к чистому апстриму** — `git apply --check` + побайтовое сравнение результата с `changed-files/`.
 2. **Синтаксис Swift** — файл разобран грамматикой Swift (tree-sitter): `ERROR=0`, `MISSING=0`,
@@ -191,13 +192,34 @@ build/MACOS-BUILD.md                     как собрать на macOS (Xcode
    `CFBundleDisplayName = fourfour`, `CFBundleName = fourfour`.
 4. **Границы изменений** — 6 изменённых строк в `Telegram/BUILD` (3 замена) и 1 удалённая строка в Swift-файле;
    `baseline/SHA256SUMS.txt` фиксирует хеши до/после.
-5. **API** — все использованные методы (`withUpdated(...)`, `PresentationTheme.init`, `PresentationData.withUpdated(theme:)`,
-   `ItemListPresentationData(_:)`) существуют в исходниках апстрима, метки параметров совпадают (45 проверок).
+5. **API** — 50 проверок: все использованные методы/типы существуют и объявлены `public`,
+   метки аргументов и **порядок** именованных аргументов совпадают с объявлениями
+   (проверка на порядок добавлена после того, как она поймала реальную ошибку порядка в первом варианте правки).
 
-Не проверено здесь (нужен macOS):
+### 7.2. Сборка на macOS — GitHub Actions (`.github/workflows/fourfour-build.yml`)
 
-* компиляция и сборка IPA — в этой среде нет Xcode, Swift-компилятора и macOS (Bazel собирает iOS только на macOS).
-  Команды для сборки и ожидаемый вид экрана — в [build/MACOS-BUILD.md](build/MACOS-BUILD.md).
+Серьёзную сборку делает workflow на macOS-раннере GitHub Actions:
+
+1. скачивает чистый апстрим и **сверяет SHA-256 архива** (`cb17299b…bed1`);
+2. копирует файлы из `fourfour-rebrand/changed-files/`, печатает применённые изменения в лог;
+3. ставит fake-сертификаты апстрима (`build-system/fake-codesigning`) — **Apple Developer аккаунт не нужен**;
+4. собирает bazel-ом, как это делает CI самого апстрима
+   (`build-system/Make/Make.py build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=release_arm64`);
+5. читает `CFBundleDisplayName`/`CFBundleName` из `Info.plist` **собранного приложения и из упакованного `.ipa`**,
+   публикует их в Summary запуска и **падает с ошибкой**, если имя не `fourfour`;
+6. загружает `.ipa` (unsigned) как артефакт `fourfour-ipa`.
+
+Запуск: вручную (Actions → «fourfour build (macOS)» → Run workflow) или автоматически при push в ветку
+(workflow лежит в `.github/workflows/fourfour-build.yml`, триггеры — `workflow_dispatch` и `push` с фильтром путей).
+
+Ссылка на конкретный запуск: см. Actions в репозитории; результат последнего запуска приложен к отчёту
+(скриншот/ссылка — в комментарии к PR). Что делать с полученным `.ipa`: подписать своим сертификатом
+(AltStore/Sideloadly/`codesign`+provisioning) и установить на устройство.
+
+### 7.3. Локальная сборка на своём Mac
+
+Инструкции и чек-лист визуальной проверки — в [build/MACOS-BUILD.md](build/MACOS-BUILD.md).
+
 
 ---
 

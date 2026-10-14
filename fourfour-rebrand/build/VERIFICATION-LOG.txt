@@ -1,6 +1,6 @@
 # Лог проверок fourfour-rebrand
-# Среда: Linux, без Xcode/Bazel (см. build/MACOS-BUILD.md)
-# Дата: 2026-10-14T10:17:06Z
+# Среда: Linux, без Xcode/Bazel (см. build/MACOS-BUILD.md и .github/workflows/fourfour-build.yml)
+# Дата: 2026-10-14T10:41:50Z
 
 ############ 1/3 Синтаксис Swift (tree-sitter) ############
 == Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
@@ -55,6 +55,13 @@
 [OK  ] PresentationTheme.init(inAppNotification:)
 [OK  ] PresentationTheme.init(chart:)
 [OK  ] PresentationTheme.init(preview:)
+
+=== 4b. Порядок именованных аргументов (Swift требует порядок объявления) ===
+[OK  ] navigationBar.withUpdated: аргументы переданы в порядке объявления — вызов: ['buttonColor', 'primaryTextColor', 'secondaryTextColor', 'blurredBackgroundColor', 'opaqueBackgroundColor', 'separatorColor']
+[OK  ] inputPanel.withUpdated: аргументы переданы в порядке объявления — вызов: ['panelControlAccentColor', 'panelControlColor', 'panelControlDisabledColor']
+[OK  ] rootController.withUpdated: аргументы переданы в порядке объявления — вызов: ['statusBarStyle', 'navigationBar']
+[OK  ] chat.withUpdated: аргументы переданы в порядке объявления — вызов: ['inputPanel']
+[OK  ] PresentationTheme.init: аргументы переданы в порядке объявления — вызов: ['name', 'index', 'referenceTheme', 'overallDarkAppearance', 'intro', 'passcode', 'rootController', 'list', 'chatList', 'chat', 'actionSheet', 'contextMenu', 'inAppNotification', 'chart', 'preview']
 [OK  ] PresentationData.withUpdated(theme:)
 [OK  ] ItemListPresentationData(_ presentationData: PresentationData)
 [OK  ] PresentationThemeStatusBarStyle.white (белый текст в статус-баре)
@@ -101,7 +108,7 @@
     строка 2002: top_level_target(":Swiftgram", target_environments = ["device", "simulator"]),
     строка 2044: test_host = "//Telegram:Swiftgram", # MARK: Swiftgram
 
-РЕЗУЛЬТАТ: все 45 проверок пройдены
+РЕЗУЛЬТАТ: все 50 проверок пройдены
 
 ############ 3/3 Патч применяется к чистому дереву ############
 OK: git apply --check в чистом дереве апстрима

@@ -1,5 +1,5 @@
 diff --git a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
-index da487fa1..60645e33 100644
+index da487fa1..941c8e14 100644
 --- a/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
 +++ b/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
 @@ -140,6 +140,52 @@ private struct SGSettingsControllerState: Equatable {
@@ -25,9 +25,9 @@ index da487fa1..60645e33 100644
 +        separatorColor: SGFourFourPlaqueBackgroundColor
 +    )
 +    let chatInputPanel = theme.chat.inputPanel.withUpdated(
++        panelControlAccentColor: .white,
 +        panelControlColor: .white,
-+        panelControlDisabledColor: UIColor.white.withAlphaComponent(0.5),
-+        panelControlAccentColor: .white
++        panelControlDisabledColor: UIColor.white.withAlphaComponent(0.5)
 +    )
 +    let brandedTheme = PresentationTheme(
 +        name: theme.name,

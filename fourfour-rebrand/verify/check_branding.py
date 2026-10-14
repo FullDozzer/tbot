@@ -160,6 +160,70 @@ def main():
                   "inAppNotification", "chart", "preview"]:
         check(f"PresentationTheme.init({label}:)", label in theme_init_labels)
 
+    print()
+    print("=== 4b. Порядок именованных аргументов (Swift требует порядок объявления) ===")
+
+    branding_start = swift_text.find("// MARK: fourfour branding")
+    branding_end = swift_text.find("private func SGControllerEntries")
+    branding_block = swift_text[branding_start:branding_end]
+
+    def top_level_labels(source, call_marker):
+        """Метки верхнеуровневых аргументов вызова, начинающегося с call_marker."""
+        index = source.find(call_marker)
+        if index == -1:
+            return None
+        open_index = source.find("(", index + len(call_marker) - 1)
+        depth = 0
+        parts = []
+        current = ""
+        for i in range(open_index, len(source)):
+            char = source[i]
+            if char in "([{":
+                depth += 1
+                if depth == 1:
+                    continue  # сам открывающий символ вызова не добавляем в аргумент
+            elif char in ")]}":
+                depth -= 1
+                if depth == 0:
+                    parts.append(current)
+                    break
+            if depth == 1 and char == ",":
+                parts.append(current)
+                current = ""
+            else:
+                current += char
+        labels = []
+        for part in parts:
+            match = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", part)
+            if match:
+                labels.append(match.group(1))
+        return labels
+
+    def is_subsequence(call_labels, declaration_labels):
+        it = iter(declaration_labels)
+        return all(label in it for label in call_labels)
+
+    call_sites = [
+        ("navigationBar.withUpdated", "theme.rootController.navigationBar.withUpdated(",
+         "public func withUpdated(buttonColor: UIColor? = nil, disabledButtonColor"),
+        ("inputPanel.withUpdated", "theme.chat.inputPanel.withUpdated(",
+         "public func withUpdated(panelBackgroundColor: UIColor? = nil"),
+        ("rootController.withUpdated", "theme.rootController.withUpdated(",
+         "public func withUpdated(statusBarStyle: PresentationThemeStatusBarStyle? = nil, tabBar"),
+        ("chat.withUpdated", "theme.chat.withUpdated(",
+         "public func withUpdated(defaultWallpaper: TelegramWallpaper? = nil, animateMessageColors"),
+        ("PresentationTheme.init", "let brandedTheme = PresentationTheme(",
+         "public init(name: PresentationThemeName, index: Int64"),
+    ]
+    for label, call_marker, declaration_marker in call_sites:
+        call_labels = top_level_labels(branding_block, call_marker)
+        declaration_labels = labels_of(extract_signature(theme_source, declaration_marker) or "")
+        declaration_order = [item for item in re.findall(
+            r"([A-Za-z_][A-Za-z0-9_]*)\s*:", extract_signature(theme_source, declaration_marker) or "")]
+        check(f"{label}: аргументы переданы в порядке объявления",
+              call_labels is not None and is_subsequence(call_labels, declaration_order),
+              f"вызов: {call_labels}")
+
     check("PresentationData.withUpdated(theme:)",
           "public func withUpdated(theme: PresentationTheme) -> PresentationData" in presentation_data_source)
     check("ItemListPresentationData(_ presentationData: PresentationData)",
