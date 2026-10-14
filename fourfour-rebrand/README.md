@@ -223,6 +223,18 @@ CI у форка тоже сломан. Поэтому CI использует �
 на UI/брендинг Telegram это не влияет). Файлы апстрима при этом не перезаписываются:
 конфиг копируется в рабочую копию как `build-system/fourfour-ci-configuration.json`.
 
+Что выяснилось при запуске (и учтено в workflow — пригодится тем, кто собирает вручную):
+
+* **сабмодули обязательны.** Сборка требует `third-party/td`, `third-party/webrtc/webrtc`,
+  `submodules/TgVoipWebrtc/tgcalls`, `build-system/bazel-rules/*` и др. В tar.gz-архиве GitHub их нет,
+  поэтому нужен `git clone --recurse-submodules` (проверка патча по архиву при этом остаётся корректной).
+* **`sg_config`.** `Make.py` этого форка требует ключ `sg_config`; штатный
+  `build-system/appstore-configuration.json` его не содержит (собственный CI форка на этом и падает).
+* **`/Applications/Xcode.app`.** Сторонние сборки (dav1d, webrtc, tgcalls) прописаны на этот путь жёстко
+  (`-isysroot /Applications/Xcode.app/.../iPhoneOS.sdk`). Если удалять «лишние» Xcode с раннера, ссылка
+  «повисает» и компиляция падает с `'errno.h' file not found` — ссылку нужно переустановить на нужную версию
+  (в workflow это делается, и версия Xcode приводится к 26.2 из `versions.json`).
+
 Запуск: вручную (Actions → «fourfour build (macOS)» → Run workflow) или автоматически при push в ветку
 (workflow лежит в `.github/workflows/fourfour-build.yml`, триггеры — `workflow_dispatch` и `push` с фильтром путей).
 
