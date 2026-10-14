@@ -1,0 +1,117 @@
+# Лог проверок fourfour-rebrand
+# Среда: Linux, без Xcode/Bazel (см. build/MACOS-BUILD.md и .github/workflows/fourfour-build.yml)
+# Дата: 2026-10-14T10:41:50Z
+
+############ 1/3 Синтаксис Swift (tree-sitter) ############
+== Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift
+   оригинал:   ERROR=0  MISSING=0
+   изменённый: ERROR=0  MISSING=0
+   OK: новых синтаксических ошибок нет
+
+РЕЗУЛЬТАТ: синтаксис изменённых файлов в порядке
+
+############ 2/3 Брендинг и используемые API ############
+=== 1. Отображаемое имя приложения (Telegram/BUILD) ===
+[OK  ] AppNameInfoPlist: CFBundleDisplayName = fourfour
+[OK  ] TelegramInfoPlist: CFBundleDisplayName = fourfour
+[OK  ] TelegramInfoPlist: CFBundleName = fourfour
+
+=== 2. Изменения в Telegram/BUILD строго ограничены ===
+[OK  ] в BUILD изменены только значения CFBundleDisplayName/CFBundleName (3 строки) — изменённых строк: 6 (ожидалось 6 = 3 удалённых + 3 добавленных)
+[OK  ] не тронуты внутренние идентификаторы (имя bazel-таргета, проект Xcode)
+
+=== 3. Экран настроек fourfour (SGSettingsController.swift) ===
+[OK  ] заголовок верхней плашки = fourfour
+[OK  ] фон верхней плашки = #000000
+[OK  ] чёрная тема применяется только к экрану настроек fourfour
+[OK  ] из исходного файла удалена только одна строка (заголовок Swiftgram) — удалено строк: 1
+[OK  ] остальные строки только добавлены (интерфейс не переписывался)
+
+=== 4. Используемые API существуют в апстриме ===
+[OK  ] PresentationThemeRootNavigationBar.withUpdated(buttonColor:)
+[OK  ] PresentationThemeRootNavigationBar.withUpdated(primaryTextColor:)
+[OK  ] PresentationThemeRootNavigationBar.withUpdated(secondaryTextColor:)
+[OK  ] PresentationThemeRootNavigationBar.withUpdated(blurredBackgroundColor:)
+[OK  ] PresentationThemeRootNavigationBar.withUpdated(opaqueBackgroundColor:)
+[OK  ] PresentationThemeRootNavigationBar.withUpdated(separatorColor:)
+[OK  ] PresentationThemeChatInputPanel.withUpdated(panelControlColor:)
+[OK  ] PresentationThemeChatInputPanel.withUpdated(panelControlDisabledColor:)
+[OK  ] PresentationThemeChatInputPanel.withUpdated(panelControlAccentColor:)
+[OK  ] PresentationThemeRootController.withUpdated(statusBarStyle:)
+[OK  ] PresentationThemeRootController.withUpdated(navigationBar:)
+[OK  ] PresentationThemeChat.withUpdated(inputPanel:)
+[OK  ] PresentationTheme.init(name:)
+[OK  ] PresentationTheme.init(index:)
+[OK  ] PresentationTheme.init(referenceTheme:)
+[OK  ] PresentationTheme.init(overallDarkAppearance:)
+[OK  ] PresentationTheme.init(intro:)
+[OK  ] PresentationTheme.init(passcode:)
+[OK  ] PresentationTheme.init(rootController:)
+[OK  ] PresentationTheme.init(list:)
+[OK  ] PresentationTheme.init(chatList:)
+[OK  ] PresentationTheme.init(chat:)
+[OK  ] PresentationTheme.init(actionSheet:)
+[OK  ] PresentationTheme.init(contextMenu:)
+[OK  ] PresentationTheme.init(inAppNotification:)
+[OK  ] PresentationTheme.init(chart:)
+[OK  ] PresentationTheme.init(preview:)
+
+=== 4b. Порядок именованных аргументов (Swift требует порядок объявления) ===
+[OK  ] navigationBar.withUpdated: аргументы переданы в порядке объявления — вызов: ['buttonColor', 'primaryTextColor', 'secondaryTextColor', 'blurredBackgroundColor', 'opaqueBackgroundColor', 'separatorColor']
+[OK  ] inputPanel.withUpdated: аргументы переданы в порядке объявления — вызов: ['panelControlAccentColor', 'panelControlColor', 'panelControlDisabledColor']
+[OK  ] rootController.withUpdated: аргументы переданы в порядке объявления — вызов: ['statusBarStyle', 'navigationBar']
+[OK  ] chat.withUpdated: аргументы переданы в порядке объявления — вызов: ['inputPanel']
+[OK  ] PresentationTheme.init: аргументы переданы в порядке объявления — вызов: ['name', 'index', 'referenceTheme', 'overallDarkAppearance', 'intro', 'passcode', 'rootController', 'list', 'chatList', 'chat', 'actionSheet', 'contextMenu', 'inAppNotification', 'chart', 'preview']
+[OK  ] PresentationData.withUpdated(theme:)
+[OK  ] ItemListPresentationData(_ presentationData: PresentationData)
+[OK  ] PresentationThemeStatusBarStyle.white (белый текст в статус-баре)
+
+=== 5. Валидность plist-фрагментов (XML) ===
+[OK  ] AppNameInfoPlist: XML валиден
+[OK  ]   → CFBundleDisplayName — значение: 'fourfour'
+[OK  ] TelegramInfoPlist: XML валиден
+[OK  ]   → CFBundleDisplayName — значение: 'fourfour'
+[OK  ]   → CFBundleName — значение: 'fourfour'
+
+=== 6. Что осталось содержать «Swiftgram» (осознанно не менялось) ===
+  Всего упоминаний «Swiftgram» в Telegram/BUILD: 32
+    строка 20: # MARK: Swiftgram
+    строка 167: # MARK: Swiftgram
+    строка 174: minimum_watchos_version="7.0" # MARK: Swiftgram
+    строка 283: "//Swiftgram/SGStrings:SGLocalizableStrings",
+    строка 287: # MARK: Swiftgram
+    строка 319: # MARK: Swiftgram alternative icons
+    строка 340: composer_icon_folders = ["Swiftgram"]
+    строка 375: SGRESOURCES = ["//Swiftgram/SGSettingsUI:SGUIAssets", "//Swiftgram/SGPayWall:SGPayWallAssets", "//Swiftgram/SGAppBadgeAssets:SGAppBadgeAssets", "//Swiftgram/SGNY:SGNYAssets"]
+    строка 513: carplay_fragment = official_carplay_fragment # MARK: Swiftgram if telegram_bundle_id in official_bundle_ids else ""
+    строка 890: # MARK: Swiftgram
+    строка 993: <string>Swiftgram</string>
+    строка 1085: <string>Swiftgram</string>
+    строка 1192: <string>Swiftgram</string>
+    строка 1305: <string>Swiftgram</string>
+    строка 1426: # MARK: Swiftgram
+    строка 1438: <string>Swiftgram</string>
+    строка 1440: <string>Open in Swiftgram</string>
+    строка 1577: <string>Swiftgram</string>
+    строка 1671: <string>Swiftgram</string>
+    строка 1802: <string>Swiftgram stores your contacts heavily encrypted in the Telegram cloud to let you connect with your friends across all your devices.</string>
+    строка 1806: <string>When you send your location to your friends, Swiftgram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
+    строка 1808: <string>When you send your location to your friends, Swiftgram needs access to show them a map.</string>
+    строка 1812: <string>When you send your location to your friends, Swiftgram needs access to show them a map.</string>
+    строка 1918: name = "SwiftgramWatchApp",
+    строка 1931: name = "Swiftgram",
+    строка 1967: # MARK: Swiftgram
+    строка 1968: settings_bundle = "//Swiftgram/SGSettingsBundle:SGSettingsBundle",
+    строка 1985: ":embedWatchAppSetting": ":SwiftgramWatchApp",
+    строка 1998: bazel_env = {"LANG": "en_US.UTF-8","PATH": "/opt/homebrew/bin:/usr/local/bin:/bin:/usr/bin"}, # MARK: Swiftgram, otherwise Bazel through xcode does not see ccache
+    строка 1999: project_name = "Swiftgram",
+    строка 2002: top_level_target(":Swiftgram", target_environments = ["device", "simulator"]),
+    строка 2044: test_host = "//Telegram:Swiftgram", # MARK: Swiftgram
+
+РЕЗУЛЬТАТ: все 50 проверок пройдены
+
+############ 3/3 Патч применяется к чистому дереву ############
+OK: git apply --check в чистом дереве апстрима
+OK: оригинал + патч == changed-files/ (побайтово)
+
+РЕЗУЛЬТАТ: все доступные проверки пройдены

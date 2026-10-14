@@ -1,0 +1,97 @@
+name: fourfour — проверка имени в собранном .ipa
+
+# Берёт артефакт fourfour-ipa (сборка из workflow «fourfour build (macOS)»),
+# распаковывает .ipa, читает Info.plist собранного приложения и публикует
+# CFBundleDisplayName / CFBundleName / CFBundleIdentifier как аннотации запуска
+# (видны во вкладке Checks и в API репозитория) + таблицу в Summary.
+# Падает с ошибкой, если имя приложения не fourfour.
+
+on:
+  # при push в эти ветки проверяется артефакт последней успешной сборки
+  # (сам workflow сборки запускается отдельно, по своим путям)
+  push:
+    branches:
+      - arena/d33af276-tbot
+      - main
+    paths:
+      - "fourfour-rebrand/**"
+      - ".github/workflows/fourfour-verify-ipa.yml"
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID запуска «fourfour build (macOS)» (по умолчанию — последний успешный)"
+        required: false
+        default: ""
+  workflow_run:
+    workflows: ["fourfour build (macOS)"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-ipa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (нужен скрипт проверки)
+        uses: actions/checkout@v4
+
+      - name: Определить запуск сборки
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -eo pipefail
+          RUN_ID="$INPUT_RUN_ID"
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$EVENT_RUN_ID"
+          fi
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID="$(gh run list --repo "$GITHUB_REPOSITORY" \
+              --workflow fourfour-build.yml --status success --limit 1 --json databaseId \
+              --jq '.[0].databaseId')"
+          fi
+          echo "проверяю артефакт запуска: $RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,headSha,displayTitle \
+            --jq '"сборка: \(.displayTitle) (\(.conclusion), \(.headSha))"' | tee run-info.txt
+
+      - name: Скачать артефакт fourfour-ipa
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eo pipefail
+          mkdir -p artifacts
+          gh run download "${{ steps.pick.outputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" -n fourfour-ipa -D artifacts
+          ls -lh artifacts
+
+      - name: Распаковать .ipa
+        run: |
+          set -eo pipefail
+          mkdir -p ipa
+          IPA="$(ls artifacts/*.ipa | head -1)"
+          echo "ipa: $IPA"
+          unzip -o "$IPA" -d ipa > /dev/null
+          find ipa/Payload -maxdepth 2 -type d | head
+
+      - name: Прочитать и проверить Info.plist
+        run: |
+          python3 fourfour-rebrand/verify/check_ipa_plist.py --expected fourfour ipa | tee plist-info.txt
+
+      - name: Итог в Summary
+        if: always()
+        run: |
+          {
+            echo "## Имя приложения в собранном .ipa"
+            echo ""
+            echo "Запуск сборки: [${{ steps.pick.outputs.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ steps.pick.outputs.run_id }})"
+            echo ""
+            echo '```'
+            cat plist-info.txt 2>/dev/null || echo "проверка не выполнена"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
