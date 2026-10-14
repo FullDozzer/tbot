@@ -13,45 +13,74 @@
 
 ## Шаги сборки на macOS
 
-1. Получить исходники и применить патч (см. `../verify/apply_patch.sh`, либо `git clone --recursive -j8 https://github.com/Swiftgram/Telegram-iOS.git` + `git apply ../patches/0001-fourfour-rebrand.patch`).
-
-2. Подготовить конфигурацию сборки (bundle id, api_id/api_hash, team_id) — как в README апстрима:
+1. Получить исходники **вместе с git-сабмодулями** и применить патч:
 
 ```bash
-openssl rand -hex 8
-# создать Xcode-проект с Product Name = Swiftgram, Organization Identifier = org.<hex>
-# взять Team ID из сертификата Apple Development
-# заполнить build-system/template_minimal_development_configuration.json
+git clone --depth 1 --recurse-submodules --shallow-submodules \
+    https://github.com/Swiftgram/Telegram-iOS.git Telegram-iOS
+cd Telegram-iOS
+git apply /path/to/tbot/fourfour-rebrand/patches/0001-fourfour-rebrand.patch
 ```
 
-   Ничего из этих настроек патч не меняет: bundle id, scheme, entitlements, provisioning, team id — как в апстриме
-   (хеши файлов: `../baseline/UNTOUCHED-CONFIG-SHA256.txt`).
+   Сабмодули обязательны для сборки (`third-party/td`, `third-party/webrtc/webrtc`,
+   `submodules/TgVoipWebrtc/tgcalls`, `build-system/bazel-rules/*` и др.) — в tar.gz-архиве GitHub
+   их нет, поэтому скачивание архива для **сборки** не подходит (для проверки патча — подходит,
+   см. `../verify/apply_patch.sh`).
 
-3. Собрать:
+2. Подготовить конфигурацию сборки. Патч ничего из этого не меняет (bundle id, scheme, entitlements,
+   provisioning, team id — как в апстриме; хеши файлов: `../baseline/UNTOUCHED-CONFIG-SHA256.txt`).
+
+   Готовый вариант для сборки без своего Apple-аккаунта — файл из этого репозитория
+   `../ci/appstore-configuration.json` (значения апстрима + обязательный для форка ключ `sg_config`,
+   без него `Make.py` падает с «Configuration at ... does not contain sg_config»):
 
 ```bash
-python3 build-system/Make/Make.py \
+cp /path/to/tbot/fourfour-rebrand/ci/appstore-configuration.json build-system/my-configuration.json
+python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs   # fake-подпись
+```
+
+   Свой аккаунт: `openssl rand -hex 8`, Xcode-проект с Product Name = `Swiftgram`, Organization
+   Identifier = `org.<hex>`, Team ID из сертификата Apple Development → заполнить
+   `build-system/template_minimal_development_configuration.json` (и не забыть `sg_config`).
+
+3. Собрать (пример — сборка под устройство с fake-подписью; `.ipa` подписывается уже на вашей стороне):
+
+```bash
+python3 -u build-system/Make/Make.py \
+    --overrideXcodeVersion \
     --cacheDir="$HOME/telegram-bazel-cache" \
     build \
-    --configurationPath=build-system/template_minimal_development_configuration.json \
-    --xcodeManagedCodesigning \
+    --configurationPath=build-system/my-configuration.json \
+    --codesigningInformationPath=build-system/fake-codesigning \
     --buildNumber=1 \
-    --configuration=debug
+    --configuration=debug_arm64 \
+    --outputBuildArtifactsPath="$PWD/build-out"
 ```
 
-   Артефакты: `bazel-bin/Telegram/fourfour.ipa` (имя IPA выводится из имени bazel-таргета — он остался
+   `--configuration` — одно из `debug_arm64`, `release_arm64`, `debug_sim_arm64`, `release_sim_arm64`
+   (`--outputBuildArtifactsPath` доступен только для сборок под устройство). Сборка под симулятор
+   вообще не требует подписи:
+
+```bash
+python3 -u build-system/Make/Make.py --overrideXcodeVersion build \
+    --configurationPath=build-system/my-configuration.json \
+    --codesigningInformationPath=build-system/fake-codesigning \
+    --buildNumber=1 --configuration=debug_sim_arm64
+```
+
+   Артефакты: `build-out/Swiftgram.ipa` (имя IPA выводится из имени bazel-таргета — он остался
    `Swiftgram`, поэтому файл может называться `Swiftgram.ipa`; имя **приложения на iPhone** берётся
    из `CFBundleDisplayName` и будет `fourfour`).
 
    Симулятор:
 
 ```bash
-python3 build-system/Make/Make.py \
-    --cacheDir="$HOME/telegram-bazel-cache" \
+# без подписи (fake-подпись), чтобы не требовался Apple-аккаунт:
+python3 build-system/Make/Make.py --overrideXcodeVersion \
     generateProject \
-    --configurationPath=build-system/template_minimal_development_configuration.json \
-    --xcodeManagedCodesigning
-# далее в Xcode: схема fourfour/Swiftgram, симулятор iPhone, Run
+    --configurationPath=build-system/my-configuration.json \
+    --codesigningInformationPath=build-system/fake-codesigning
+# далее в Xcode: схема Swiftgram (внутреннее имя не менялось), симулятор iPhone, Run
 ```
 
 4. Установка на устройство/в симулятор:

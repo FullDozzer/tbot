@@ -201,14 +201,18 @@ build/MACOS-BUILD.md                     как собрать на macOS (Xcode
 
 Серьёзную сборку делает workflow на macOS-раннере GitHub Actions:
 
-1. скачивает чистый апстрим и **сверяет SHA-256 архива** (`cb17299b…bed1`);
-2. копирует файлы из `fourfour-rebrand/changed-files/`, печатает применённые изменения в лог;
-3. ставит fake-сертификаты апстрима (`build-system/fake-codesigning`) — **Apple Developer аккаунт не нужен**;
-4. собирает bazel-ом, как это делает CI самого апстрима
-   (`build-system/Make/Make.py build --configurationPath=build-system/appstore-configuration.json --codesigningInformationPath=build-system/fake-codesigning --configuration=release_arm64`);
-5. читает `CFBundleDisplayName`/`CFBundleName` из `Info.plist` **собранного приложения и из упакованного `.ipa`**,
+1. клонирует апстрим `git clone --depth 1 --recurse-submodules --shallow-submodules`
+   (сабмодули обязательны: `third-party/td`, `webrtc`, `tgcalls`, `bazel-rules/*` — в tar.gz-архиве их нет)
+   и сверяет `HEAD` с зафиксированным коммитом `cf8b23be…` (2026-07-29);
+2. копирует файлы из `fourfour-rebrand/changed-files/` и сверяет sha256 **оригиналов и результата**
+   с `baseline/SHA256SUMS.txt` — сборка идёт ровно из тех файлов, что проверялись;
+3. копирует CI-конфигурацию `fourfour-rebrand/ci/appstore-configuration.json` (см. ниже);
+4. ставит fake-сертификаты апстрима (`build-system/fake-codesigning`) — **Apple Developer аккаунт не нужен**;
+5. собирает bazel-ом, как это делает CI самого апстрима
+   (`build-system/Make/Make.py build --configurationPath=… --codesigningInformationPath=build-system/fake-codesigning --configuration=debug_arm64`);
+6. читает `CFBundleDisplayName`/`CFBundleName` из `Info.plist` **собранного приложения и из упакованного `.ipa`**,
    публикует их в Summary запуска и **падает с ошибкой**, если имя не `fourfour`;
-6. загружает `.ipa` (unsigned) как артефакт `fourfour-ipa`.
+7. загружает `.ipa` (unsigned) как артефакт `fourfour-ipa`.
 
 Важная деталь: `Make.py` этого форка **требует ключ `sg_config`** в конфигурации
 (иначе сборка падает с «Configuration at ... does not contain sg_config»), а штатный

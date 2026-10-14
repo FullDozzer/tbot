@@ -1,7 +1,8 @@
 name: fourfour build (macOS)
 
 # Что делает этот workflow:
-#   1. скачивает чистый апстрим Swiftgram/Telegram-iOS (с проверкой SHA-256 архива);
+#   1. клонирует апстрим Swiftgram/Telegram-iOS (git clone --recursive, HEAD сверяется
+#      с зафиксированным коммитом; хеши оригиналов сверяются с baseline/SHA256SUMS.txt);
 #   2. применяет изменения fourfour из fourfour-rebrand/changed-files/;
 #   3. собирает приложение через bazel (как это делает сам апстрим в своём CI,
 #      с fake-codesigning — реальный Apple Developer аккаунт не нужен);
@@ -18,9 +19,10 @@ on:
         description: "Конфигурация сборки (build-system/Make/Make.py)"
         type: choice
         options:
+          - debug_arm64
           - release_arm64
           - debug_sim_arm64
-        default: release_arm64
+        default: debug_arm64
   push:
     branches:
       - arena/d33af276-tbot
@@ -35,8 +37,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  UPSTREAM_TARBALL_URL: "https://codeload.github.com/Swiftgram/Telegram-iOS/tar.gz/refs/heads/master"
-  UPSTREAM_TARBALL_SHA256: "cb17299b5c37329645c32720f58a6516e32e757b0aebefa934863a73f43cbed1"
+  UPSTREAM_REPO: "https://github.com/Swiftgram/Telegram-iOS.git"
+  UPSTREAM_COMMIT: "cf8b23beaaac4126a396337ac2d5be13f9f76b66"
   UPSTREAM_XCODE_VERSION: "26.2"
 
 jobs:
@@ -56,7 +58,7 @@ jobs:
           uname -m
           df -h /
           sysctl -n hw.ncpu
-          echo "configuration=${{ github.event.inputs.configuration || 'release_arm64' }}" >> "$GITHUB_ENV"
+          echo "configuration=${{ github.event.inputs.configuration || 'debug_arm64' }}" >> "$GITHUB_ENV"
 
       - name: Освободить место на диске (удалить неиспользуемые Xcode)
         run: |
@@ -79,16 +81,29 @@ jobs:
           fi
           xcode-select -p
           xcodebuild -version
-          echo "SRC=$RUNNER_TEMP/upstream/Telegram-iOS-master" >> "$GITHUB_ENV"
+          echo "SRC=$RUNNER_TEMP/upstream/Telegram-iOS" >> "$GITHUB_ENV"
 
-      - name: Скачать апстрим Swiftgram/Telegram-iOS
+      - name: Скачать апстрим Swiftgram/Telegram-iOS (git clone + submodules)
         run: |
+          # ВАЖНО: сборка требует git-сабмодули (third-party/td, webrtc, tgcalls, bazel-rules…),
+          # поэтому нужен именно clone --recursive: в tar.gz-архиве GitHub их нет.
           set -eo pipefail
+          export GIT_TERMINAL_PROMPT=0
           mkdir -p "$RUNNER_TEMP/upstream"
-          curl -L --fail --retry 3 -o "$RUNNER_TEMP/swiftgram.tar.gz" "$UPSTREAM_TARBALL_URL"
-          echo "${UPSTREAM_TARBALL_SHA256}  $RUNNER_TEMP/swiftgram.tar.gz" | shasum -a 256 -c -
-          tar -xzf "$RUNNER_TEMP/swiftgram.tar.gz" -C "$RUNNER_TEMP/upstream"
-          ls "$RUNNER_TEMP/upstream"
+          git clone \
+            --depth 1 --branch master \
+            --recurse-submodules --shallow-submodules \
+            "$UPSTREAM_REPO" "$SRC"
+          cd "$SRC"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          echo "HEAD апстрима: $HEAD_SHA"
+          if [ "$HEAD_SHA" != "$UPSTREAM_COMMIT" ]; then
+            echo "::error::HEAD апстрима ($HEAD_SHA) не совпадает с зафиксированным $UPSTREAM_COMMIT"
+            exit 1
+          fi
+          git submodule status | head -20
+          du -sh . 2>/dev/null | tail -1
+          df -h /
 
       - name: Применить ребрендинг fourfour
         run: |
@@ -107,6 +122,21 @@ jobs:
           grep -n "<string>fourfour</string>" "$SRC/Telegram/BUILD"
           grep -n 'title: .text("fourfour")' "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
           grep -n "UIColor(rgb: 0x000000)" "$SRC/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"
+
+          echo "== сверка хешей файлов (оригиналы апстрима и результат патча) =="
+          SUMS="$GITHUB_WORKSPACE/fourfour-rebrand/baseline/SHA256SUMS.txt"
+          (cd "$GITHUB_WORKSPACE/fourfour-rebrand" && shasum -a 256 -c baseline/SHA256SUMS.txt)
+          for pair in "Telegram/BUILD:changed-files/Telegram/BUILD" \
+                      "Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift:changed-files/Swiftgram/SGSettingsUI/Sources/SGSettingsController.swift"; do
+            target="${pair%%:*}"
+            expected="$(grep -F "  ${pair##*:}" "$SUMS" | cut -d' ' -f1)"
+            actual="$(shasum -a 256 "$SRC/$target" | cut -d' ' -f1)"
+            if [ -z "$expected" ] || [ "$actual" != "$expected" ]; then
+              echo "::error::Файл $target не совпадает с проверенным (ожидался $expected, получен $actual)"
+              exit 1
+            fi
+            echo "OK $target -> $actual"
+          done
 
       - name: Установить fake-сертификаты (без Apple Developer аккаунта)
         run: |
