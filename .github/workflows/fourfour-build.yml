@@ -79,6 +79,18 @@ jobs:
           else
             echo "::warning::Xcode ${UPSTREAM_XCODE_VERSION} не найден на образе, использую текущий"
           fi
+          # /Applications/Xcode.app — стандартная ссылка на Xcode. Часть сторонних сборок
+          # (dav1d, webrtc, tgcalls) обращается к SDK строго по этому пути
+          # (например, package/crossfiles/arm64-iPhoneOS.meson: -isysroot /Applications/Xcode.app/...),
+          # поэтому после удаления лишних Xcode ссылку нужно переустановить, иначе она «повисает»
+          # и компиляция падает на 'errno.h' file not found.
+          XCODE_APP="/Applications/Xcode_${UPSTREAM_XCODE_VERSION}.app"
+          if [ -d "$XCODE_APP" ] && [ ! -e /Applications/Xcode.app ]; then
+            sudo rm -rf /Applications/Xcode.app
+            sudo ln -s "$XCODE_APP" /Applications/Xcode.app
+          fi
+          ls -ld /Applications/Xcode.app
+
           xcode-select -p
           xcodebuild -version
           echo "SRC=$RUNNER_TEMP/upstream/Telegram-iOS" >> "$GITHUB_ENV"
@@ -159,6 +171,8 @@ jobs:
             -in build-system/fake-codesigning/profiles/Telegram.mobileprovision 2>/dev/null \
             | python3 -c 'import sys,plistlib;d=plistlib.loads(sys.stdin.buffer.read());print(d["Entitlements"].get("application-identifier"), d["Entitlements"].get("aps-environment"))' 2>&1)"
 
+          SDK_CHECK="$(ls /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include/errno.h 2>&1 | tail -1)"
+
           CONFIG_CHECK="$(python3 -c "import sys; sys.path.insert(0, 'build-system/Make'); from BuildConfiguration import build_configuration_from_json as load; c = load(path='build-system/fourfour-ci-configuration.json'); print('OK bundle_id=%s team_id=%s sg_config=%r' % (c.bundle_id, c.team_id, c.sg_config))" 2>&1 | tail -3 | tr '\n' ' ')"
 
           ARGPARSE="$(python3 build-system/Make/Make.py --overrideXcodeVersion build \
@@ -166,13 +180,14 @@ jobs:
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 --buildNumber=1 --help 2>&1 | head -3 | tr '\n' ' ')"
 
-          python3 - "$XCODEVER" "$PYVER" "$DISK" "$BAZEL_ARCH" "$HTTP_CODE" "$PROFILE" "$CONFIG_CHECK" "$ARGPARSE" <<'PY'
+          python3 - "$XCODEVER" "$PYVER" "$DISK" "$BAZEL_ARCH" "$HTTP_CODE" "$PROFILE" "$SDK_CHECK" "$CONFIG_CHECK" "$ARGPARSE" <<'PY'
           import sys
 
           def escape(text):
               return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
-          titles = ["Xcode", "python3", "диск", "arch (python)", "bazel URL HTTP", "профиль подписи", "CI-конфигурация", "argparse"]
+          titles = ["Xcode", "python3", "диск", "arch (python)", "bazel URL HTTP", "профиль подписи",
+                    "iPhoneOS.sdk errno.h", "CI-конфигурация", "argparse"]
           for title, value in zip(titles, sys.argv[1:]):
               print("::warning title=preflight {}::{}".format(title, escape(value[:900])))
           PY
